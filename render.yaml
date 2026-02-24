@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: product-ai-backend
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 16.20.2
+      - key: TIDB_HOST
+        sync: false
+      - key: TIDB_PORT
+        sync: false
+      - key: TIDB_USER
+        sync: false
+      - key: TIDB_PASSWORD
+        sync: false
+      - key: TIDB_DATABASE
+        sync: false
+      - key: TIDB_ENABLE_SSL
+        value: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true

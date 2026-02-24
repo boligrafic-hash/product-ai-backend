@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Product Description Generator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>✨ AI Product Description Generator</h1>
+            <p class="subtitle">Create compelling, SEO-friendly descriptions for your products</p>
+        </header>
+
+        <main>
+            <!-- Sección de registro (visible cuando no hay usuario) -->
+            <div id="register-section" class="register-section">
+                <h2>Register to start</h2>
+                <form id="register-form">
+                    <input type="email" id="email" placeholder="Your email" required>
+                    <input type="text" id="full-name" placeholder="Your name (optional)">
+                    <button type="submit">Register</button>
+                </form>
+            </div>
+
+            <!-- Sección principal (visible cuando hay usuario) -->
+            <div id="main-section" style="display: none;">
+                <div class="user-info">
+                    <span id="user-email"></span>
+                    <span id="user-plan" class="plan-badge">Free Plan</span>
+                </div>
+
+                <div class="input-section">
+                    <label for="product-details">Product details:</label>
+                    <textarea 
+                        id="product-details" 
+                        placeholder="Example: men's cotton t-shirt, black, minimalist design"
+                        rows="4"
+                    ></textarea>
+                    
+                    <div class="options">
+                        <label for="tone">Tone:</label>
+                        <select id="tone">
+                            <option value="persuasive">Persuasive & Professional</option>
+                            <option value="casual">Casual & Friendly</option>
+                            <option value="luxury">Luxury & Premium</option>
+                        </select>
+                    </div>
+
+                    <button id="generate-btn">✨ Generate Description</button>
+                </div>
+
+                <div class="output-section" id="output-section" style="display: none;">
+                    <h3>Your AI-Generated Description:</h3>
+                    <div id="description-output" class="description-box"></div>
+                    <button id="copy-btn" class="secondary-btn">📋 Copy to Clipboard</button>
+                </div>
+
+                <div class="loading" id="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Creating your description...</p>
+                </div>
+
+                <div class="history-section" id="history-section">
+                    <h3>Your Recent Descriptions</h3>
+                    <div id="history-list"></div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>⚡ Powered by AI • 5 free generations per month</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
