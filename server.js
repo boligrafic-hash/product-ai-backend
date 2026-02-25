@@ -19,22 +19,25 @@ const PORT = process.env.PORT || 3000;
 // Configuración de CORS mejorada para producción y desarrollo
 const allowedOrigins = [
     'http://localhost:3001',
-    'https://tu-app.vercel.app' // ← CAMBIA ESTO por tu URL de Vercel después del deploy
-];
+    'https://product-ai-frontend.vercel.app', // Tu frontend en Vercel
+    process.env.ALLOWED_ORIGIN // Para añadir más orígenes desde variable de entorno
+].filter(Boolean); // Filtra valores vacíos
 
 app.use(cors({
     origin: function(origin, callback) {
-        // Permitir peticiones sin origen (como apps móviles o Postman)
+        // Permitir peticiones sin origen (como apps móviles, Postman o el mismo servidor)
         if (!origin) return callback(null, true);
         
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
-            console.log('Bloqueado por CORS:', origin);
+            console.log('🚫 Bloqueado por CORS - Origen no permitido:', origin);
+            console.log('✅ Orígenes permitidos:', allowedOrigins);
             callback(new Error('No autorizado por CORS'));
         }
     },
-    credentials: true
+    credentials: true,
+    optionsSuccessStatus: 200
 }));
 
 app.use(express.json());
@@ -45,7 +48,8 @@ app.use(session({
     saveUninitialized: false,
     cookie: { 
         secure: process.env.NODE_ENV === 'production', // true solo en producción con HTTPS
-        maxAge: 24 * 60 * 60 * 1000
+        maxAge: 24 * 60 * 60 * 1000,
+        sameSite: 'lax'
     }
 }));
 
@@ -78,10 +82,10 @@ function generateVerificationToken() {
 
 // Función de email comentada temporalmente
 async function sendVerificationEmail(email, token) {
-    console.log(`[SIMULADO] Email de verificación para ${email}: http://localhost:3000/verify-email?token=${token}`);
+    console.log(`[SIMULADO] Email de verificación para ${email}: https://product-ai-backend.onrender.com/verify-email?token=${token}`);
     return true;
     /*
-    const verificationLink = `http://localhost:3000/verify-email?token=${token}`;
+    const verificationLink = `https://product-ai-backend.onrender.com/verify-email?token=${token}`;
     
     const mailOptions = {
         from: `"AI Descriptions" <${process.env.EMAIL_USER}>`,
@@ -201,7 +205,7 @@ app.get('/auth/google',
 );
 
 app.get('/auth/google/callback',
-    passport.authenticate('google', { failureRedirect: 'http://localhost:3001?auth=failed' }),
+    passport.authenticate('google', { failureRedirect: 'https://product-ai-frontend.vercel.app?auth=failed' }),
     (req, res) => {
         const user = req.user;
         const userData = {
@@ -212,7 +216,7 @@ app.get('/auth/google/callback',
             is_verified: user.is_verified
         };
         const userParam = encodeURIComponent(JSON.stringify(userData));
-        res.redirect(`http://localhost:3001?googleUser=${userParam}`);
+        res.redirect(`https://product-ai-frontend.vercel.app?googleUser=${userParam}`);
     }
 );
 */
@@ -342,7 +346,7 @@ app.get('/verify-email', async (req, res) => {
     let connection;
 
     if (!token) {
-        return res.redirect('http://localhost:3001?verification=failed');
+        return res.redirect('https://product-ai-frontend.vercel.app?verification=failed');
     }
 
     try {
@@ -354,7 +358,7 @@ app.get('/verify-email', async (req, res) => {
         );
 
         if (verifications.length === 0) {
-            return res.redirect('http://localhost:3001?verification=invalid');
+            return res.redirect('https://product-ai-frontend.vercel.app?verification=invalid');
         }
 
         const verification = verifications[0];
@@ -369,11 +373,11 @@ app.get('/verify-email', async (req, res) => {
             [verification.user_id]
         );
 
-        res.redirect('http://localhost:3001?verification=success');
+        res.redirect('https://product-ai-frontend.vercel.app?verification=success');
 
     } catch (error) {
         console.error('Error verifying email:', error);
-        res.redirect('http://localhost:3001?verification=error');
+        res.redirect('https://product-ai-frontend.vercel.app?verification=error');
     } finally {
         if (connection) await connection.end();
     }
@@ -704,14 +708,15 @@ app.get('/current-user', (req, res) => {
 app.get('/logout', (req, res) => {
     req.logout((err) => {
         if (err) console.error('Error en logout:', err);
-        res.redirect('http://localhost:3001');
+        res.redirect('https://product-ai-frontend.vercel.app');
     });
 });
 
 app.get('/', (req, res) => {
     res.json({ 
         message: '✅ Servidor funcionando (modo desarrollo - Google OAuth y Email comentados)',
-        auth: 'Registro y Login con email disponibles'
+        auth: 'Registro y Login con email disponibles',
+        cors_allowed: allowedOrigins
     });
 });
 
@@ -720,4 +725,5 @@ app.listen(PORT, () => {
     console.log(`🔐 Auth: Registro y Login con email (Google OAuth comentado)`);
     console.log(`📧 Email: Modo simulado (los tokens se muestran en consola)`);
     console.log(`🤖 IA: OpenAI conectada`);
+    console.log(`🌐 CORS permitidos:`, allowedOrigins);
 });
