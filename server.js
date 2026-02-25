@@ -16,12 +16,11 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuración de CORS mejorada para producción y desarrollo
+// Configuración de CORS simplificada y corregida
 const allowedOrigins = [
     'http://localhost:3001',
-    'https://product-ai-frontend.vercel.app', // Tu frontend en Vercel
-    process.env.ALLOWED_ORIGIN // Para añadir más orígenes desde variable de entorno
-].filter(Boolean); // Filtra valores vacíos
+    'https://product-ai-frontend.vercel.app'
+];
 
 app.use(cors({
     origin: function(origin, callback) {
