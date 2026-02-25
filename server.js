@@ -16,10 +16,13 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuración de CORS simplificada y corregida
+// ============================================
+// CONFIGURACIÓN DE CORS (ACTUALIZADA)
+// ============================================
 const allowedOrigins = [
     'http://localhost:3001',
-    'https://product-ai-frontend.vercel.app'
+    'https://product-ai-frontend.vercel.app',
+    'https://product-ai-frontend-j3hn.vercel.app' // NUEVA URL DE VERCEL
 ];
 
 app.use(cors({
@@ -345,7 +348,7 @@ app.get('/verify-email', async (req, res) => {
     let connection;
 
     if (!token) {
-        return res.redirect('https://product-ai-frontend.vercel.app?verification=failed');
+        return res.redirect('https://product-ai-frontend-j3hn.vercel.app?verification=failed');
     }
 
     try {
@@ -357,7 +360,7 @@ app.get('/verify-email', async (req, res) => {
         );
 
         if (verifications.length === 0) {
-            return res.redirect('https://product-ai-frontend.vercel.app?verification=invalid');
+            return res.redirect('https://product-ai-frontend-j3hn.vercel.app?verification=invalid');
         }
 
         const verification = verifications[0];
@@ -372,11 +375,11 @@ app.get('/verify-email', async (req, res) => {
             [verification.user_id]
         );
 
-        res.redirect('https://product-ai-frontend.vercel.app?verification=success');
+        res.redirect('https://product-ai-frontend-j3hn.vercel.app?verification=success');
 
     } catch (error) {
         console.error('Error verifying email:', error);
-        res.redirect('https://product-ai-frontend.vercel.app?verification=error');
+        res.redirect('https://product-ai-frontend-j3hn.vercel.app?verification=error');
     } finally {
         if (connection) await connection.end();
     }
@@ -707,7 +710,7 @@ app.get('/current-user', (req, res) => {
 app.get('/logout', (req, res) => {
     req.logout((err) => {
         if (err) console.error('Error en logout:', err);
-        res.redirect('https://product-ai-frontend.vercel.app');
+        res.redirect('https://product-ai-frontend-j3hn.vercel.app');
     });
 });
 
