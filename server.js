@@ -6,15 +6,15 @@ const fetch = require('node-fetch');
 const bcrypt = require('bcrypt');
 const session = require('express-session');
 const passport = require('passport');
-// GoogleStrategy comentado temporalmente
-// const GoogleStrategy = require('passport-google-oauth20').Strategy;
-// Nodemailer comentado temporalmente
-// const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail'); // SendGrid para emails reales
 const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Configurar SendGrid con la API key
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // ============================================
 // CONFIGURACIÓN DE CORS (ACTUALIZADA)
@@ -22,14 +22,12 @@ const PORT = process.env.PORT || 3000;
 const allowedOrigins = [
     'http://localhost:3001',
     'https://product-ai-frontend.vercel.app',
-    'https://product-ai-frontend-j3hn.vercel.app' // NUEVA URL DE VERCEL
+    'https://product-ai-frontend-j3hn.vercel.app'
 ];
 
 app.use(cors({
     origin: function(origin, callback) {
-        // Permitir peticiones sin origen (como apps móviles, Postman o el mismo servidor)
         if (!origin) return callback(null, true);
-        
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
@@ -49,7 +47,7 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: process.env.NODE_ENV === 'production', // true solo en producción con HTTPS
+        secure: process.env.NODE_ENV === 'production',
         maxAge: 24 * 60 * 60 * 1000,
         sameSite: 'lax'
     }
@@ -67,32 +65,20 @@ const dbConfig = {
     ssl: process.env.TIDB_ENABLE_SSL === 'true' ? {} : null
 };
 
-// Nodemailer comentado temporalmente
-/*
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    }
-});
-*/
-
+// ============================================
+// FUNCIÓN DE EMAIL REAL CON SENDGRID
+// ============================================
 function generateVerificationToken() {
     return crypto.randomBytes(32).toString('hex');
 }
 
-// Función de email comentada temporalmente
 async function sendVerificationEmail(email, token) {
-    console.log(`[SIMULADO] Email de verificación para ${email}: https://product-ai-backend.onrender.com/verify-email?token=${token}`);
-    return true;
-    /*
     const verificationLink = `https://product-ai-backend.onrender.com/verify-email?token=${token}`;
     
-    const mailOptions = {
-        from: `"AI Descriptions" <${process.env.EMAIL_USER}>`,
+    const msg = {
         to: email,
-        subject: 'Verify your email address',
+        from: process.env.VERIFIED_SENDER,
+        subject: 'Verify your email address - AI Description Generator',
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #667eea;">Welcome to AI Description Generator!</h2>
@@ -116,14 +102,13 @@ async function sendVerificationEmail(email, token) {
     };
 
     try {
-        const info = await transporter.sendMail(mailOptions);
-        console.log('Verification email sent:', info.messageId);
+        await sgMail.send(msg);
+        console.log(`✅ Email de verificación enviado a ${email}`);
         return true;
     } catch (error) {
-        console.error('Error sending email:', error);
+        console.error('❌ Error enviando email con SendGrid:', error.response?.body || error.message);
         return false;
     }
-    */
 }
 
 // Google OAuth comentado temporalmente
@@ -276,6 +261,9 @@ async function buildAIContext(connection, userId, productDetails, tone) {
     return contextPrompt;
 }
 
+// ============================================
+// REGISTRO (con email real)
+// ============================================
 app.post('/register', async (req, res) => {
     const { email, password, full_name, nicho, preferred_style } = req.body;
     let connection;
@@ -325,14 +313,19 @@ app.post('/register', async (req, res) => {
             await saveUserMemory(connection, userId, 'style', 'preferred_style', preferred_style);
         }
 
-        sendVerificationEmail(email, verificationToken).catch(err => 
-            console.error('Error sending verification email:', err)
-        );
+        // Enviar email real
+        const emailSent = await sendVerificationEmail(email, verificationToken);
+        
+        if (!emailSent) {
+            console.warn('⚠️ El email no pudo enviarse, pero el usuario fue registrado');
+        }
 
         res.json({ 
             success: true, 
             user_id: userId,
-            message: 'Registro exitoso. Por favor verifica tu email para activar tu cuenta.'
+            message: emailSent 
+                ? 'Registro exitoso. Por favor verifica tu email para activar tu cuenta.'
+                : 'Registro exitoso. Hubo un problema enviando el email de verificación. Contacta a soporte.'
         });
 
     } catch (error) {
@@ -481,9 +474,7 @@ app.post('/resend-verification', async (req, res) => {
             [user.id, email, verificationToken, expiresAt]
         );
 
-        sendVerificationEmail(email, verificationToken).catch(err => 
-            console.error('Error sending verification email:', err)
-        );
+        await sendVerificationEmail(email, verificationToken);
 
         res.json({ 
             success: true, 
@@ -716,16 +707,16 @@ app.get('/logout', (req, res) => {
 
 app.get('/', (req, res) => {
     res.json({ 
-        message: '✅ Servidor funcionando (modo desarrollo - Google OAuth y Email comentados)',
+        message: '✅ Servidor funcionando (con email real - SendGrid)',
         auth: 'Registro y Login con email disponibles',
         cors_allowed: allowedOrigins
     });
 });
 
 app.listen(PORT, () => {
-    console.log(`✅ Servidor en http://localhost:${PORT} (MODO DESARROLLO)`);
-    console.log(`🔐 Auth: Registro y Login con email (Google OAuth comentado)`);
-    console.log(`📧 Email: Modo simulado (los tokens se muestran en consola)`);
+    console.log(`✅ Servidor con email REAL (SendGrid) en http://localhost:${PORT}`);
+    console.log(`🔐 Auth: Registro y Login con email`);
+    console.log(`📧 Email: SendGrid configurado (${process.env.VERIFIED_SENDER})`);
     console.log(`🤖 IA: OpenAI conectada`);
     console.log(`🌐 CORS permitidos:`, allowedOrigins);
 });
