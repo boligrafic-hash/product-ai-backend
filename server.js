@@ -440,10 +440,10 @@ app.post('/resend-verification', async (req, res) => {
 });
 
 // ============================================
-// RUTA DE GENERACIÓN DE DESCRIPCIONES (MEJORADA)
+// RUTA DE GENERACIÓN DE DESCRIPCIONES (CON SOPORTE DE IDIOMAS)
 // ============================================
 app.post('/generate-description', async (req, res) => {
-    const { user_id, product_details, tone, language = 'es', include_seo = true } = req.body;
+    const { user_id, product_details, tone, language = 'en', include_seo = true } = req.body;
     let connection;
 
     if (!user_id) {
@@ -494,26 +494,53 @@ app.post('/generate-description', async (req, res) => {
         await saveUserMemory(connection, user_id, 'product_history', `product_${Date.now()}`, product_details);
 
         // ============================================
-        // PROMPT MEJORADO PARA DESCRIPCIONES PROFESIONALES EN ESPAÑOL
+        // CONFIGURACIÓN DE IDIOMA (INGLÉS POR DEFECTO)
         // ============================================
-        const mainPrompt = `Actúa como un copywriter experto en e-commerce especializado en moda y ropa vintage.
+        const languageConfig = {
+            en: {
+                system: 'You are a professional e-commerce copywriter specializing in creating compelling product descriptions for the US market. Your tone is persuasive, benefit-focused, and tailored to American shoppers.',
+                audience: 'US online shoppers. Use American English spelling and terminology.',
+                keywords: 'Include natural SEO keywords relevant to the product category.',
+                fallbackTitle: 'Discover the ultimate in comfort and style',
+                fallbackDesc: 'Discover the ultimate in comfort and style with this premium product. Perfect for any occasion.'
+            },
+            es: {
+                system: 'Eres un copywriter experto en e-commerce especializado en crear descripciones de productos persuasivas para el mercado hispanohablante. Tu tono es profesional y cercano.',
+                audience: 'Público hispano. Usa español neutro y claro.',
+                keywords: 'Incluye palabras clave SEO en español de forma natural.',
+                fallbackTitle: 'Descubre lo último en comodidad y estilo',
+                fallbackDesc: 'Descubre lo último en comodidad y estilo con este producto premium. Perfecto para cualquier ocasión.'
+            }
+        };
 
-Genera una descripción de producto en español para el siguiente artículo:
+        const config = languageConfig[language] || languageConfig.en;
+
+        // Construir el prompt según el tono seleccionado
+        const toneDescription = {
+            persuasive: language === 'en' ? 'persuasive, benefit-focused, and compelling' : 'persuasivo, centrado en beneficios y convincente',
+            casual: language === 'en' ? 'casual, friendly, and conversational' : 'casual, amigable y conversacional',
+            luxury: language === 'en' ? 'elegant, sophisticated, and aspirational' : 'elegante, sofisticado y aspiracional'
+        };
+
+        const mainPrompt = `Act as an expert e-commerce copywriter specializing in product descriptions.
+
+Generate a product description in ${language === 'en' ? 'English' : 'Spanish'} for the following item:
 "${product_details}"
 
-La descripción debe cumplir con estas directrices:
-- **Tono:** ${tone === 'persuasive' ? 'Profesional, persuasivo y cercano' : tone === 'casual' ? 'Casual, amigable y moderno' : 'Elegante, sofisticado y aspiracional'}.
-- **Enfoque:** Destaca los beneficios emocionales y cómo se verá/sentirá el cliente, más que las características técnicas.
-- **Estructura:** 
-  1. Un título atractivo y llamativo.
-  2. Un primer párrafo que enganche y conecte emocionalmente.
-  3. Una lista de 3-4 características/beneficios en formato bullet point.
-  4. Un párrafo de cierre con una llamada a la acción sutil.
-- **SEO:** Incluye de forma natural palabras clave relevantes como: vintage, retro, clásico, único, edición limitada, atemporal.
-- **Longitud:** Entre 200 y 250 palabras.
-- **Idioma:** Español neutro, claro y fluido para público hispano.
+Target audience: ${config.audience}
+${contextPrompt}
 
-${contextPrompt}`;
+The description must follow these guidelines:
+- **Tone:** ${toneDescription[tone] || toneDescription.persuasive}
+- **Focus:** Highlight emotional benefits and how the customer will feel, not just technical features.
+- **SEO:** ${config.keywords}
+- **Structure:** 
+  1. An attractive, click-worthy title.
+  2. An engaging first paragraph that connects emotionally.
+  3. A list of 3-4 key features/benefits in bullet points.
+  4. A closing paragraph with a subtle call to action.
+- **Length:** Between 200 and 250 words.
+- **Language:** ${language === 'en' ? 'Natural, fluent American English.' : 'Español neutro, claro y fluido.'}`;
 
         const mainResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -524,7 +551,7 @@ ${contextPrompt}`;
             body: JSON.stringify({
                 model: 'gpt-3.5-turbo',
                 messages: [
-                    { role: 'system', content: 'Eres un copywriter experto en e-commerce especializado en moda. Tu misión es crear descripciones que conviertan visitantes en compradores.' },
+                    { role: 'system', content: config.system },
                     { role: 'user', content: mainPrompt }
                 ],
                 temperature: 0.7,
@@ -533,7 +560,18 @@ ${contextPrompt}`;
         });
 
         const mainData = await mainResponse.json();
-        if (mainData.error) throw new Error(mainData.error.message);
+        
+        // Verificar errores de API key
+        if (mainData.error) {
+            console.error('Error de OpenAI:', mainData.error);
+            if (mainData.error.type === 'invalid_request_error' && mainData.error.message.includes('api key')) {
+                return res.status(500).json({ 
+                    error: 'Error de configuración de OpenAI. Por favor, verifica la API key.',
+                    details: 'API key inválida'
+                });
+            }
+            throw new Error(mainData.error.message);
+        }
 
         let mainDescription = '', metaDescription = '', suggestedKeywords = [];
 
@@ -541,7 +579,11 @@ ${contextPrompt}`;
             mainDescription = mainData.choices[0].message.content;
 
             if (include_seo) {
-                // Meta description mejorada
+                // Meta description según idioma
+                const metaPrompt = language === 'en' 
+                    ? `Generate a persuasive SEO meta description (max 155 characters) for: ${product_details}. Include relevant keywords and a call to action.`
+                    : `Genera una meta descripción persuasiva para SEO (máx 155 caracteres) para: ${product_details}. Incluye palabras clave relevantes y llamada a la acción.`;
+
                 const metaRes = await fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST', 
                     headers: { 
@@ -551,8 +593,8 @@ ${contextPrompt}`;
                     body: JSON.stringify({
                         model: 'gpt-3.5-turbo',
                         messages: [
-                            { role: 'system', content: 'Eres un experto en SEO.' },
-                            { role: 'user', content: `Genera una meta descripción persuasiva (máximo 155 caracteres) para este producto: ${product_details}. Debe incluir palabras clave de moda vintage y llamar a la acción.` }
+                            { role: 'system', content: language === 'en' ? 'SEO specialist.' : 'Experto en SEO.' },
+                            { role: 'user', content: metaPrompt }
                         ],
                         temperature: 0.5,
                         max_tokens: 60
@@ -563,7 +605,11 @@ ${contextPrompt}`;
                     metaDescription = metaData.choices[0].message.content;
                 }
 
-                // Keywords mejoradas
+                // Keywords según idioma
+                const kwPrompt = language === 'en'
+                    ? `Generate 5-7 SEO keywords for: ${product_details}. Include relevant terms for the US market. Return as comma-separated list.`
+                    : `Genera 5-7 palabras clave SEO para: ${product_details}. Incluye términos relevantes para el mercado hispano. Devuélvelas como lista separada por comas.`;
+
                 const kwRes = await fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST', 
                     headers: { 
@@ -573,8 +619,8 @@ ${contextPrompt}`;
                     body: JSON.stringify({
                         model: 'gpt-3.5-turbo',
                         messages: [
-                            { role: 'system', content: 'Eres un experto en SEO y marketing digital.' },
-                            { role: 'user', content: `Genera 5-7 palabras clave SEO en español para: ${product_details}. Incluye términos de moda vintage y tendencias. Devuélvelas como lista separada por comas.` }
+                            { role: 'system', content: language === 'en' ? 'SEO keyword researcher.' : 'Investigador de palabras clave SEO.' },
+                            { role: 'user', content: kwPrompt }
                         ],
                         temperature: 0.6,
                         max_tokens: 100
@@ -614,13 +660,19 @@ ${contextPrompt}`;
 
     } catch (error) {
         console.error('Error:', error);
+        
+        // Fallback con el idioma correspondiente
+        const fallbackConfig = languageConfig[req.body.language || 'en'] || languageConfig.en;
+        
         res.json({ 
             success: true, 
-            description: 'Descubre lo último en comodidad y estilo con este producto premium. Perfecto para cualquier ocasión.', 
-            meta_description: `Compra ${req.body.product_details || 'este producto'} online. Envíos rápidos.`, 
-            suggested_keywords: ['calidad', 'premium', 'moda', 'estilo', 'tendencia'], 
-            remaining: '?', 
-            warning: 'Usando respaldo' 
+            description: fallbackConfig.fallbackDesc, 
+            meta_description: `Shop ${req.body.product_details || 'this product'} online. Fast shipping.`, 
+            suggested_keywords: fallbackConfig.language === 'en' 
+                ? ['quality', 'premium', 'style', 'trend', 'shop'] 
+                : ['calidad', 'premium', 'estilo', 'moda', 'tienda'], 
+            remaining: limit - (currentCount + 1),
+            warning: 'Usando descripción de respaldo' 
         });
     } finally {
         if (connection) await connection.end();
@@ -847,6 +899,6 @@ app.listen(PORT, () => {
     console.log(`✅ Servidor en http://localhost:${PORT}`);
     console.log(`🔐 Auth: Registro y Login con email`);
     console.log(`📧 Email: ${process.env.SENDGRID_API_KEY && process.env.SENDGRID_API_KEY.startsWith('SG.') ? 'SendGrid configurado' : 'Modo simulado'}`);
-    console.log(`🤖 IA: OpenAI conectada - Modo profesional activado`);
+    console.log(`🤖 IA: OpenAI conectada - Modo profesional activado (Inglés por defecto)`);
     console.log(`🌐 CORS permitidos:`, allowedOrigins);
 });
