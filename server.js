@@ -439,8 +439,11 @@ app.post('/resend-verification', async (req, res) => {
     }
 });
 
+// ============================================
+// RUTA DE GENERACIÓN DE DESCRIPCIONES (MEJORADA)
+// ============================================
 app.post('/generate-description', async (req, res) => {
-    const { user_id, product_details, tone, language = 'en', include_seo = true } = req.body;
+    const { user_id, product_details, tone, language = 'es', include_seo = true } = req.body;
     let connection;
 
     if (!user_id) {
@@ -490,13 +493,27 @@ app.post('/generate-description', async (req, res) => {
         const contextPrompt = await buildAIContext(connection, user_id, product_details, tone);
         await saveUserMemory(connection, user_id, 'product_history', `product_${Date.now()}`, product_details);
 
-        const langInst = { 
-            en: 'English. US shoppers.', 
-            es: 'español. Público hispano.', 
-            pt: 'português. Público brasileiro.' 
-        };
+        // ============================================
+        // PROMPT MEJORADO PARA DESCRIPCIONES PROFESIONALES EN ESPAÑOL
+        // ============================================
+        const mainPrompt = `Actúa como un copywriter experto en e-commerce especializado en moda y ropa vintage.
 
-        const mainPrompt = `Write a ${tone} product description for: ${product_details}. ${langInst[language] || langInst.en} ${contextPrompt}`;
+Genera una descripción de producto en español para el siguiente artículo:
+"${product_details}"
+
+La descripción debe cumplir con estas directrices:
+- **Tono:** ${tone === 'persuasive' ? 'Profesional, persuasivo y cercano' : tone === 'casual' ? 'Casual, amigable y moderno' : 'Elegante, sofisticado y aspiracional'}.
+- **Enfoque:** Destaca los beneficios emocionales y cómo se verá/sentirá el cliente, más que las características técnicas.
+- **Estructura:** 
+  1. Un título atractivo y llamativo.
+  2. Un primer párrafo que enganche y conecte emocionalmente.
+  3. Una lista de 3-4 características/beneficios en formato bullet point.
+  4. Un párrafo de cierre con una llamada a la acción sutil.
+- **SEO:** Incluye de forma natural palabras clave relevantes como: vintage, retro, clásico, único, edición limitada, atemporal.
+- **Longitud:** Entre 200 y 250 palabras.
+- **Idioma:** Español neutro, claro y fluido para público hispano.
+
+${contextPrompt}`;
 
         const mainResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -507,11 +524,11 @@ app.post('/generate-description', async (req, res) => {
             body: JSON.stringify({
                 model: 'gpt-3.5-turbo',
                 messages: [
-                    { role: 'system', content: 'E-commerce copywriter.' }, 
+                    { role: 'system', content: 'Eres un copywriter experto en e-commerce especializado en moda. Tu misión es crear descripciones que conviertan visitantes en compradores.' },
                     { role: 'user', content: mainPrompt }
                 ],
-                temperature: 0.7, 
-                max_tokens: 400
+                temperature: 0.7,
+                max_tokens: 500
             })
         });
 
@@ -524,6 +541,7 @@ app.post('/generate-description', async (req, res) => {
             mainDescription = mainData.choices[0].message.content;
 
             if (include_seo) {
+                // Meta description mejorada
                 const metaRes = await fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST', 
                     headers: { 
@@ -533,10 +551,10 @@ app.post('/generate-description', async (req, res) => {
                     body: JSON.stringify({
                         model: 'gpt-3.5-turbo',
                         messages: [
-                            { role: 'system', content: 'SEO specialist.' }, 
-                            { role: 'user', content: `Meta description (max 155 chars) for: ${product_details}` }
+                            { role: 'system', content: 'Eres un experto en SEO.' },
+                            { role: 'user', content: `Genera una meta descripción persuasiva (máximo 155 caracteres) para este producto: ${product_details}. Debe incluir palabras clave de moda vintage y llamar a la acción.` }
                         ],
-                        temperature: 0.5, 
+                        temperature: 0.5,
                         max_tokens: 60
                     })
                 });
@@ -545,6 +563,7 @@ app.post('/generate-description', async (req, res) => {
                     metaDescription = metaData.choices[0].message.content;
                 }
 
+                // Keywords mejoradas
                 const kwRes = await fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST', 
                     headers: { 
@@ -554,10 +573,10 @@ app.post('/generate-description', async (req, res) => {
                     body: JSON.stringify({
                         model: 'gpt-3.5-turbo',
                         messages: [
-                            { role: 'system', content: 'SEO keyword researcher.' }, 
-                            { role: 'user', content: `5-7 keywords for: ${product_details}. Comma-separated.` }
+                            { role: 'system', content: 'Eres un experto en SEO y marketing digital.' },
+                            { role: 'user', content: `Genera 5-7 palabras clave SEO en español para: ${product_details}. Incluye términos de moda vintage y tendencias. Devuélvelas como lista separada por comas.` }
                         ],
-                        temperature: 0.6, 
+                        temperature: 0.6,
                         max_tokens: 100
                     })
                 });
@@ -597,9 +616,9 @@ app.post('/generate-description', async (req, res) => {
         console.error('Error:', error);
         res.json({ 
             success: true, 
-            description: 'Discover the ultimate in comfort and style.', 
-            meta_description: `Shop ${req.body.product_details || 'this product'} online.`, 
-            suggested_keywords: ['quality', 'premium'], 
+            description: 'Descubre lo último en comodidad y estilo con este producto premium. Perfecto para cualquier ocasión.', 
+            meta_description: `Compra ${req.body.product_details || 'este producto'} online. Envíos rápidos.`, 
+            suggested_keywords: ['calidad', 'premium', 'moda', 'estilo', 'tendencia'], 
             remaining: '?', 
             warning: 'Usando respaldo' 
         });
@@ -828,6 +847,6 @@ app.listen(PORT, () => {
     console.log(`✅ Servidor en http://localhost:${PORT}`);
     console.log(`🔐 Auth: Registro y Login con email`);
     console.log(`📧 Email: ${process.env.SENDGRID_API_KEY && process.env.SENDGRID_API_KEY.startsWith('SG.') ? 'SendGrid configurado' : 'Modo simulado'}`);
-    console.log(`🤖 IA: OpenAI conectada`);
+    console.log(`🤖 IA: OpenAI conectada - Modo profesional activado`);
     console.log(`🌐 CORS permitidos:`, allowedOrigins);
 });
