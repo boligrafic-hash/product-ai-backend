@@ -440,7 +440,7 @@ app.post('/resend-verification', async (req, res) => {
 });
 
 // ============================================
-// RUTA DE GENERACIÓN DE DESCRIPCIONES (CON SOPORTE DE IDIOMAS)
+// RUTA DE GENERACIÓN DE DESCRIPCIONES (OPENROUTER)
 // ============================================
 app.post('/generate-description', async (req, res) => {
     const { user_id, product_details, tone, language = 'en', include_seo = true } = req.body;
@@ -542,14 +542,25 @@ The description must follow these guidelines:
 - **Length:** Between 200 and 250 words.
 - **Language:** ${language === 'en' ? 'Natural, fluent American English.' : 'Español neutro, claro y fluido.'}`;
 
-        const mainResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        // ============================================
+        // LLAMADA A OPENROUTER (GRATIS)
+        // ============================================
+        const mainResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: { 
-                'Content-Type': 'application/json', 
-                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                // ⚠️ Headers obligatorios para modelos gratuitos
+                'HTTP-Referer': 'https://product-ai-frontend-j3hn.vercel.app',
+                'X-Title': 'AI Description Generator'
             },
             body: JSON.stringify({
-                model: 'gpt-3.5-turbo',
+                // Modelo gratuito recomendado (Gemma 3)
+                model: 'google/gemma-3-27b-it:free',
+                // Alternativas gratuitas:
+                // 'meta-llama/llama-3.3-70b-instruct:free' - Llama 3.3
+                // 'mistralai/mistral-7b-instruct:free' - Mistral 7B
+                // 'qwen/qwen3-4b:free' - Qwen 4B
                 messages: [
                     { role: 'system', content: config.system },
                     { role: 'user', content: mainPrompt }
@@ -561,75 +572,81 @@ The description must follow these guidelines:
 
         const mainData = await mainResponse.json();
         
-        // Verificar errores de API key
+        // Verificar errores de OpenRouter
         if (mainData.error) {
-            console.error('Error de OpenAI:', mainData.error);
-            if (mainData.error.type === 'invalid_request_error' && mainData.error.message.includes('api key')) {
+            console.error('Error de OpenRouter:', mainData.error);
+            if (mainData.error.code === 402) {
                 return res.status(500).json({ 
-                    error: 'Error de configuración de OpenAI. Por favor, verifica la API key.',
-                    details: 'API key inválida'
+                    error: 'Límite de uso diario alcanzado. Intenta mañana o cambia de modelo.',
+                    details: 'Cuota gratuita excedida'
                 });
             }
             throw new Error(mainData.error.message);
         }
 
-        let mainDescription = '', metaDescription = '', suggestedKeywords = [];
+        if (!mainData.choices || !mainData.choices[0] || !mainData.choices[0].message) {
+            throw new Error('Respuesta inválida de OpenRouter');
+        }
 
-        if (mainData.choices?.[0]?.message) {
-            mainDescription = mainData.choices[0].message.content;
+        let mainDescription = mainData.choices[0].message.content;
+        let metaDescription = '';
+        let suggestedKeywords = [];
 
-            if (include_seo) {
-                // Meta description según idioma
-                const metaPrompt = language === 'en' 
-                    ? `Generate a persuasive SEO meta description (max 155 characters) for: ${product_details}. Include relevant keywords and a call to action.`
-                    : `Genera una meta descripción persuasiva para SEO (máx 155 caracteres) para: ${product_details}. Incluye palabras clave relevantes y llamada a la acción.`;
+        if (include_seo) {
+            // Meta description con OpenRouter
+            const metaPrompt = language === 'en' 
+                ? `Generate a persuasive SEO meta description (max 155 characters) for: ${product_details}. Include relevant keywords and a call to action.`
+                : `Genera una meta descripción persuasiva para SEO (máx 155 caracteres) para: ${product_details}. Incluye palabras clave relevantes y llamada a la acción.`;
 
-                const metaRes = await fetch('https://api.openai.com/v1/chat/completions', {
-                    method: 'POST', 
-                    headers: { 
-                        'Content-Type': 'application/json', 
-                        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` 
-                    },
-                    body: JSON.stringify({
-                        model: 'gpt-3.5-turbo',
-                        messages: [
-                            { role: 'system', content: language === 'en' ? 'SEO specialist.' : 'Experto en SEO.' },
-                            { role: 'user', content: metaPrompt }
-                        ],
-                        temperature: 0.5,
-                        max_tokens: 60
-                    })
-                });
-                const metaData = await metaRes.json();
-                if (metaData.choices?.[0]?.message) {
-                    metaDescription = metaData.choices[0].message.content;
-                }
+            const metaRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST', 
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    'HTTP-Referer': 'https://product-ai-frontend-j3hn.vercel.app',
+                    'X-Title': 'AI Description Generator'
+                },
+                body: JSON.stringify({
+                    model: 'google/gemma-3-27b-it:free',
+                    messages: [
+                        { role: 'system', content: language === 'en' ? 'SEO specialist.' : 'Experto en SEO.' },
+                        { role: 'user', content: metaPrompt }
+                    ],
+                    temperature: 0.5,
+                    max_tokens: 60
+                })
+            });
+            const metaData = await metaRes.json();
+            if (metaData.choices?.[0]?.message) {
+                metaDescription = metaData.choices[0].message.content;
+            }
 
-                // Keywords según idioma
-                const kwPrompt = language === 'en'
-                    ? `Generate 5-7 SEO keywords for: ${product_details}. Include relevant terms for the US market. Return as comma-separated list.`
-                    : `Genera 5-7 palabras clave SEO para: ${product_details}. Incluye términos relevantes para el mercado hispano. Devuélvelas como lista separada por comas.`;
+            // Keywords con OpenRouter
+            const kwPrompt = language === 'en'
+                ? `Generate 5-7 SEO keywords for: ${product_details}. Include relevant terms for the US market. Return as comma-separated list.`
+                : `Genera 5-7 palabras clave SEO para: ${product_details}. Incluye términos relevantes para el mercado hispano. Devuélvelas como lista separada por comas.`;
 
-                const kwRes = await fetch('https://api.openai.com/v1/chat/completions', {
-                    method: 'POST', 
-                    headers: { 
-                        'Content-Type': 'application/json', 
-                        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` 
-                    },
-                    body: JSON.stringify({
-                        model: 'gpt-3.5-turbo',
-                        messages: [
-                            { role: 'system', content: language === 'en' ? 'SEO keyword researcher.' : 'Investigador de palabras clave SEO.' },
-                            { role: 'user', content: kwPrompt }
-                        ],
-                        temperature: 0.6,
-                        max_tokens: 100
-                    })
-                });
-                const kwData = await kwRes.json();
-                if (kwData.choices?.[0]?.message) {
-                    suggestedKeywords = kwData.choices[0].message.content.split(',').map(k => k.trim());
-                }
+            const kwRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST', 
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    'HTTP-Referer': 'https://product-ai-frontend-j3hn.vercel.app',
+                    'X-Title': 'AI Description Generator'
+                },
+                body: JSON.stringify({
+                    model: 'google/gemma-3-27b-it:free',
+                    messages: [
+                        { role: 'system', content: language === 'en' ? 'SEO keyword researcher.' : 'Investigador de palabras clave SEO.' },
+                        { role: 'user', content: kwPrompt }
+                    ],
+                    temperature: 0.6,
+                    max_tokens: 100
+                })
+            });
+            const kwData = await kwRes.json();
+            if (kwData.choices?.[0]?.message) {
+                suggestedKeywords = kwData.choices[0].message.content.split(',').map(k => k.trim());
             }
         }
 
@@ -668,7 +685,7 @@ The description must follow these guidelines:
             success: true, 
             description: fallbackConfig.fallbackDesc, 
             meta_description: `Shop ${req.body.product_details || 'this product'} online. Fast shipping.`, 
-            suggested_keywords: fallbackConfig.language === 'en' 
+            suggested_keywords: language === 'en' 
                 ? ['quality', 'premium', 'style', 'trend', 'shop'] 
                 : ['calidad', 'premium', 'estilo', 'moda', 'tienda'], 
             remaining: limit - (currentCount + 1),
@@ -899,6 +916,6 @@ app.listen(PORT, () => {
     console.log(`✅ Servidor en http://localhost:${PORT}`);
     console.log(`🔐 Auth: Registro y Login con email`);
     console.log(`📧 Email: ${process.env.SENDGRID_API_KEY && process.env.SENDGRID_API_KEY.startsWith('SG.') ? 'SendGrid configurado' : 'Modo simulado'}`);
-    console.log(`🤖 IA: OpenAI conectada - Modo profesional activado (Inglés por defecto)`);
+    console.log(`🤖 IA: OpenRouter gratis (${process.env.OPENROUTER_API_KEY ? 'conectado' : 'no configurado'})`);
     console.log(`🌐 CORS permitidos:`, allowedOrigins);
 });
