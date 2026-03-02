@@ -430,11 +430,13 @@ app.post('/resend-verification', async (req, res) => {
 });
 
 // ============================================
-// RUTA DE GENERACIÓN DE DESCRIPCIONES (GOOGLE GEMINI)
+// RUTA DE GENERACIÓN DE DESCRIPCIONES (GOOGLE GEMINI - CORREGIDA)
 // ============================================
 app.post('/generate-description', async (req, res) => {
     const { user_id, product_details, tone, language = 'en', include_seo = true } = req.body;
     let connection;
+    let limit = 5; // ← DEFINICIÓN FUERA DEL TRY
+    let currentCount = 0;
 
     if (!user_id) {
         return res.status(401).json({ error: 'Usuario no autenticado' });
@@ -486,13 +488,14 @@ app.post('/generate-description', async (req, res) => {
             [user_id]
         );
 
-        let currentCount = 0, plan = 'free';
+        let plan = 'free';
         if (usageRows.length > 0) {
             currentCount = usageRows[0].count;
             plan = usageRows[0].plan;
         }
 
-        const limit = plan === 'free' ? 5 : plan === 'pro' ? 50 : 1000;
+        // AHORA actualizamos limit
+        limit = plan === 'free' ? 5 : plan === 'pro' ? 50 : 1000;
         if (currentCount >= limit) {
             return res.status(403).json({ 
                 error: 'Límite alcanzado', 
@@ -533,11 +536,11 @@ The description must follow these guidelines:
 - **Language:** ${language === 'en' ? 'Natural, fluent American English.' : 'Español neutro, claro y fluido.'}`;
 
         // ============================================
-        // LLAMADA A GOOGLE GEMINI (GRATIS Y ROBUSTO)
+        // LLAMADA A GOOGLE GEMINI (MODELO CORREGIDO)
         // ============================================
         
-        // Obtener el modelo (Gemini 1.5 Flash es rápido y tiene excelente relación calidad/precio)
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // ✅ MODELO CORREGIDO: gemini-pro en lugar de gemini-1.5-flash
+        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
         // Generar descripción principal
         const result = await model.generateContent(mainPrompt);
@@ -598,6 +601,7 @@ The description must follow these guidelines:
         
         const fallbackConfig = languageConfig[req.body.language || 'en'] || languageConfig.en;
         
+        // AHORA limit ESTÁ DEFINIDO AQUÍ
         res.json({ 
             success: true, 
             description: fallbackConfig.fallbackDesc, 
@@ -833,6 +837,6 @@ app.listen(PORT, () => {
     console.log(`✅ Servidor en http://localhost:${PORT}`);
     console.log(`🔐 Auth: Registro y Login con email`);
     console.log(`📧 Email: ${process.env.SENDGRID_API_KEY && process.env.SENDGRID_API_KEY.startsWith('SG.') ? 'SendGrid configurado' : 'Modo simulado'}`);
-    console.log(`🤖 IA: Google Gemini conectado (modelo: gemini-1.5-flash)`);
+    console.log(`🤖 IA: Google Gemini conectado (modelo: gemini-pro)`);
     console.log(`🌐 CORS permitidos:`, allowedOrigins);
 });
