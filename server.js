@@ -430,12 +430,12 @@ app.post('/resend-verification', async (req, res) => {
 });
 
 // ============================================
-// RUTA DE GENERACIÓN DE DESCRIPCIONES (GOOGLE GEMINI - CORREGIDA)
+// RUTA DE GENERACIÓN DE DESCRIPCIONES (MEJORADA CON ESTILOS PROFESIONALES)
 // ============================================
 app.post('/generate-description', async (req, res) => {
     const { user_id, product_details, tone, language = 'en', include_seo = true } = req.body;
     let connection;
-    let limit = 5; // ← DEFINICIÓN FUERA DEL TRY
+    let limit = 5;
     let currentCount = 0;
 
     if (!user_id) {
@@ -443,26 +443,54 @@ app.post('/generate-description', async (req, res) => {
     }
 
     // ============================================
-    // CONFIGURACIÓN DE IDIOMA (FUERA DEL TRY)
+    // CONFIGURACIÓN DE IDIOMA
     // ============================================
     const languageConfig = {
         en: {
-            system: 'You are a professional e-commerce copywriter specializing in creating compelling product descriptions for the US market. Your tone is persuasive, benefit-focused, and tailored to American shoppers.',
             audience: 'US online shoppers. Use American English spelling and terminology.',
-            keywords: 'Include natural SEO keywords relevant to the product category.',
-            fallbackTitle: 'Discover the ultimate in comfort and style',
             fallbackDesc: 'Discover the ultimate in comfort and style with this premium product. Perfect for any occasion.'
         },
         es: {
-            system: 'Eres un copywriter experto en e-commerce especializado en crear descripciones de productos persuasivas para el mercado hispanohablante. Tu tono es profesional y cercano.',
             audience: 'Público hispano. Usa español neutro y claro.',
-            keywords: 'Incluye palabras clave SEO en español de forma natural.',
-            fallbackTitle: 'Descubre lo último en comodidad y estilo',
             fallbackDesc: 'Descubre lo último en comodidad y estilo con este producto premium. Perfecto para cualquier ocasión.'
         }
     };
 
     const config = languageConfig[language] || languageConfig.en;
+
+    // ============================================
+    // NUEVOS ESTILOS PROFESIONALES BASADOS EN ANÁLISIS DE MERCADO
+    // ============================================
+    const professionalStyles = {
+        storytelling: {
+            system: 'Eres un narrador de moda vintage con un estilo poético y evocador. Tu misión es transportar al lector a otra época, contando la historia detrás de cada prenda con un lenguaje cálido y nostálgico.',
+            description: 'cuenta una historia evocadora que conecte emocionalmente, destacando la autenticidad, el carácter único y la procedencia de la prenda',
+            title: 'crea un título poético y atractivo que invite a leer la historia',
+            keywords: 'vintage, retro, clásico, atemporal, único, historia, auténtico, nostalgia, colección, edición limitada'
+        },
+        sustainable: {
+            system: 'Eres un copywriter de moda sostenible que combina conciencia ecológica con estilo moderno. Tu tono es honesto, respetuoso con el planeta y cercano a consumidores conscientes.',
+            description: 'destaca los beneficios sostenibles, la calidad duradera, los materiales orgánicos y cómo esta prenda respeta el medio ambiente sin sacrificar estilo',
+            title: 'crea un título que refleje la conciencia ecológica y la calidad del producto',
+            keywords: 'sostenible, orgánico, eco-friendly, atemporal, calidad, consciente, natural, ético, duradero, responsable'
+        },
+        expressive: {
+            system: 'Eres un redactor de moda urbana con un estilo atrevido, vibrante y lleno de personalidad. Hablas el idioma de la calle, la autoexpresión y la actitud.',
+            description: 'usa un lenguaje enérgico y moderno que transmita actitud, personalidad y la esencia única de quien usa la prenda',
+            title: 'crea un título llamativo, moderno y con gancho que refleje personalidad',
+            keywords: 'atrevido, único, personalidad, estilo, urbano, auténtico, vibrante, actitud, moderno, streetwear'
+        }
+    };
+
+    // Mapeo de los tonos antiguos a los nuevos estilos
+    const styleMap = {
+        persuasive: 'storytelling',  // El tono persuasivo ahora es narrativo
+        casual: 'sustainable',       // El tono casual ahora es sostenible
+        luxury: 'expressive'         // El tono lujo ahora es expresivo urbano
+    };
+
+    const selectedStyle = styleMap[tone] || 'storytelling';
+    const styleConfig = professionalStyles[selectedStyle];
 
     try {
         connection = await mysql.createConnection(dbConfig);
@@ -494,7 +522,6 @@ app.post('/generate-description', async (req, res) => {
             plan = usageRows[0].plan;
         }
 
-        // AHORA actualizamos limit
         limit = plan === 'free' ? 5 : plan === 'pro' ? 50 : 1000;
         if (currentCount >= limit) {
             return res.status(403).json({ 
@@ -508,38 +535,36 @@ app.post('/generate-description', async (req, res) => {
         const contextPrompt = await buildAIContext(connection, user_id, product_details, tone);
         await saveUserMemory(connection, user_id, 'product_history', `product_${Date.now()}`, product_details);
 
-        // Construir el prompt según el tono seleccionado
-        const toneDescription = {
-            persuasive: language === 'en' ? 'persuasive, benefit-focused, and compelling' : 'persuasivo, centrado en beneficios y convincente',
-            casual: language === 'en' ? 'casual, friendly, and conversational' : 'casual, amigable y conversacional',
-            luxury: language === 'en' ? 'elegant, sophisticated, and aspirational' : 'elegante, sofisticado y aspiracional'
-        };
+        // ============================================
+        // PROMPT PROFESIONAL MEJORADO
+        // ============================================
+        const mainPrompt = `Actúa como un copywriter experto en e-commerce especializado en moda.
 
-        const mainPrompt = `Act as an expert e-commerce copywriter specializing in product descriptions.
-
-Generate a product description in ${language === 'en' ? 'English' : 'Spanish'} for the following item:
+Genera una descripción de producto en ${language === 'en' ? 'inglés' : 'español'} para el siguiente artículo:
 "${product_details}"
 
-Target audience: ${config.audience}
-${contextPrompt}
+🎯 **ESTILO:** ${styleConfig.description}
+👤 **AUDIENCIA:** ${config.audience}
+📖 **CONTEXTO ADICIONAL:** ${contextPrompt}
 
-The description must follow these guidelines:
-- **Tone:** ${toneDescription[tone] || toneDescription.persuasive}
-- **Focus:** Highlight emotional benefits and how the customer will feel, not just technical features.
-- **SEO:** ${config.keywords}
-- **Structure:** 
-  1. An attractive, click-worthy title.
-  2. An engaging first paragraph that connects emotionally.
-  3. A list of 3-4 key features/benefits in bullet points.
-  4. A closing paragraph with a subtle call to action.
-- **Length:** Between 200 and 250 words.
-- **Language:** ${language === 'en' ? 'Natural, fluent American English.' : 'Español neutro, claro y fluido.'}`;
+**DIRECTRICES OBLIGATORIAS DE LA DESCRIPCIÓN:**
+
+1. **TÍTULO:** ${styleConfig.title}. Máximo 70 caracteres.
+2. **PRIMER PÁRRAFO:** Conecta emocionalmente, engancha al lector y presenta la prenda como algo especial.
+3. **BENEFICIOS CLAVE:** Lista de 4 beneficios en formato bullet point que destaquen:
+   - Cómo se sentirá el cliente
+   - Características únicas del producto
+   - Calidad y materiales
+   - Versatilidad de uso
+4. **PÁRRAFO DE CIERRE:** Con una llamada a la acción sutil que invite a la compra.
+5. **LONGITUD TOTAL:** Entre 200 y 250 palabras.
+6. **PALABRAS CLAVE:** Incluye de forma natural términos relacionados con moda como: ${styleConfig.keywords}.
+
+La descripción debe ser persuasiva, profesional y hacer que el cliente desee comprar inmediatamente.`;
 
         // ============================================
-        // LLAMADA A GOOGLE GEMINI (MODELO CORREGIDO)
+        // LLAMADA A GOOGLE GEMINI
         // ============================================
-        
-        // ✅ MODELO CORREGIDO: gemini-pro en lugar de gemini-1.5-flash
         const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
         // Generar descripción principal
@@ -551,19 +576,19 @@ The description must follow these guidelines:
         let suggestedKeywords = [];
 
         if (include_seo) {
-            // Meta description con Gemini
+            // Meta description mejorada
             const metaPrompt = language === 'en' 
-                ? `Generate a persuasive SEO meta description (max 155 characters) for: ${product_details}. Include relevant keywords and a call to action.`
-                : `Genera una meta descripción persuasiva para SEO (máx 155 caracteres) para: ${product_details}. Incluye palabras clave relevantes y llamada a la acción.`;
+                ? `Generate a persuasive SEO meta description (max 155 characters) for: ${product_details}. Include relevant keywords like ${styleConfig.keywords} and a call to action.`
+                : `Genera una meta descripción persuasiva para SEO (máx 155 caracteres) para: ${product_details}. Incluye palabras clave relevantes como ${styleConfig.keywords} y una llamada a la acción.`;
 
             const metaResult = await model.generateContent(metaPrompt);
             const metaResponse = await metaResult.response;
             metaDescription = metaResponse.text();
 
-            // Keywords con Gemini
+            // Keywords mejoradas
             const kwPrompt = language === 'en'
-                ? `Generate 5-7 SEO keywords for: ${product_details}. Include relevant terms for the US market. Return as comma-separated list.`
-                : `Genera 5-7 palabras clave SEO para: ${product_details}. Incluye términos relevantes para el mercado hispano. Devuélvelas como lista separada por comas.`;
+                ? `Generate 5-7 SEO keywords for a ${product_details}. Include terms like ${styleConfig.keywords}. Return as comma-separated list.`
+                : `Genera 5-7 palabras clave SEO para ${product_details}. Incluye términos como ${styleConfig.keywords}. Devuélvelas como lista separada por comas.`;
 
             const kwResult = await model.generateContent(kwPrompt);
             const kwResponse = await kwResult.response;
@@ -601,7 +626,6 @@ The description must follow these guidelines:
         
         const fallbackConfig = languageConfig[req.body.language || 'en'] || languageConfig.en;
         
-        // AHORA limit ESTÁ DEFINIDO AQUÍ
         res.json({ 
             success: true, 
             description: fallbackConfig.fallbackDesc, 
@@ -673,7 +697,7 @@ app.get('/', (req, res) => {
 });
 
 // ============================================
-// NUEVAS RUTAS DE RECUPERACIÓN DE CONTRASEÑA
+// RUTAS DE RECUPERACIÓN DE CONTRASEÑA
 // ============================================
 
 app.post('/forgot-password', async (req, res) => {
@@ -837,6 +861,7 @@ app.listen(PORT, () => {
     console.log(`✅ Servidor en http://localhost:${PORT}`);
     console.log(`🔐 Auth: Registro y Login con email`);
     console.log(`📧 Email: ${process.env.SENDGRID_API_KEY && process.env.SENDGRID_API_KEY.startsWith('SG.') ? 'SendGrid configurado' : 'Modo simulado'}`);
-    console.log(`🤖 IA: Google Gemini conectado (modelo: gemini-pro)`);
+    console.log(`🤖 IA: Google Gemini - Estilos Profesionales Activados`);
+    console.log(`📝 Estilos disponibles: Storytelling Vintage, Sostenible, Expresivo Urbano`);
     console.log(`🌐 CORS permitidos:`, allowedOrigins);
 });
