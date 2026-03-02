@@ -428,9 +428,8 @@ app.post('/resend-verification', async (req, res) => {
         if (connection) await connection.end();
     }
 });
-
 // ============================================
-// RUTA DE GENERACIÓN DE DESCRIPCIONES (MEJORADA CON ESTILOS PROFESIONALES)
+// RUTA DE GENERACIÓN DE DESCRIPCIONES (PROFESIONAL)
 // ============================================
 app.post('/generate-description', async (req, res) => {
     const { user_id, product_details, tone, language = 'en', include_seo = true } = req.body;
@@ -459,38 +458,132 @@ app.post('/generate-description', async (req, res) => {
     const config = languageConfig[language] || languageConfig.en;
 
     // ============================================
-    // NUEVOS ESTILOS PROFESIONALES BASADOS EN ANÁLISIS DE MERCADO
+    // PROMPTS PROFESIONALES POR ESTILO
     // ============================================
-    const professionalStyles = {
+    const professionalPrompts = {
         storytelling: {
-            system: 'Eres un narrador de moda vintage con un estilo poético y evocador. Tu misión es transportar al lector a otra época, contando la historia detrás de cada prenda con un lenguaje cálido y nostálgico.',
-            description: 'cuenta una historia evocadora que conecte emocionalmente, destacando la autenticidad, el carácter único y la procedencia de la prenda',
-            title: 'crea un título poético y atractivo que invite a leer la historia',
-            keywords: 'vintage, retro, clásico, atemporal, único, historia, auténtico, nostalgia, colección, edición limitada'
+            system: language === 'en' 
+                ? 'You are a master storyteller specializing in vintage fashion. Your words transport readers to another era, evoking nostalgia and authenticity. Your descriptions are poetic, warm, and deeply evocative.'
+                : 'Eres un maestro narrador especializado en moda vintage. Tus palabras transportan a los lectores a otra época, evocando nostalgia y autenticidad. Tus descripciones son poéticas, cálidas y profundamente evocadoras.',
+            prompt: language === 'en'
+                ? `Craft an enchanting product description for: "${product_details}"
+
+Write like a vintage fashion curator who has discovered a rare treasure. Your description should:
+
+✨ **OPEN WITH A HOOK:** Transport the reader to another time. Was this shirt worn at a 1950s jazz club? Did it inspire an artist in 1970s Paris?
+
+📖 **TELL ITS STORY:** Imagine the life this garment has lived. The hands that embroidered it. The stories it could tell. Create a narrative that makes the reader feel they're buying a piece of history, not just fabric.
+
+👐 **ENGAGE THE SENSES:** Describe how the aged cotton feels against skin. The weight of the fabric. The texture of the embroidery. Make them feel it.
+
+💫 **CONNECT EMOTIONALLY:** This isn't just a shirt—it's a time machine. Help the reader imagine wearing it: sipping espresso in a vintage café, flipping through vinyl records, living a more romantic life.
+
+🔍 **HIGHLIGHT WHAT MAKES IT SPECIAL:** The hand-stitched details. The unique fading. The way it's been preserved through decades. The authenticity of its vintage character.
+
+🎯 **CLOSE WITH MEANING:** End with a call to action that feels like an invitation to own a memory, not just a purchase.
+
+Write between 200-250 words. Use warm, evocative language. Be specific, be sensory, be unforgettable.`
+                : `Crea una descripción encantadora para: "${product_details}"
+
+Escribe como un curador de moda vintage que ha descubierto un tesoro único. Tu descripción debe:
+
+✨ **ABRE CON UN GANCHO:** Transporta al lector a otra época. ¿Esta camisa se usó en un club de jazz de los 50? ¿Inspiró a un artista en el París de los 70?
+
+📖 **CUENTA SU HISTORIA:** Imagina la vida que ha tenido esta prenda. Las manos que la bordaron. Las historias que podría contar. Crea una narrativa que haga sentir al lector que está comprando un pedazo de historia, no solo tela.
+
+👐 **ACTIVA LOS SENTIDOS:** Describe cómo se siente el algodón envejecido contra la piel. El peso de la tela. La textura del bordado. Haz que lo sientan.
+
+💫 **CONECTA EMOCIONALMENTE:** Esto no es solo una camisa, es una máquina del tiempo. Ayuda al lector a imaginarse usándola: tomando un espresso en un café vintage, hojeando discos de vinilo, viviendo una vida más romántica.
+
+🔍 **DESTACA LO QUE LA HACE ESPECIAL:** Los detalles bordados a mano. El desgaste único. Cómo se ha conservado a través de las décadas. La autenticidad de su carácter vintage.
+
+🎯 **CIERRA CON SIGNIFICADO:** Termina con una llamada a la acción que se sienta como una invitación a poseer un recuerdo, no solo a comprar.
+
+Escribe entre 200-250 palabras. Usa un lenguaje cálido y evocador. Sé específico, sensorial e inolvidable.`
         },
         sustainable: {
-            system: 'Eres un copywriter de moda sostenible que combina conciencia ecológica con estilo moderno. Tu tono es honesto, respetuoso con el planeta y cercano a consumidores conscientes.',
-            description: 'destaca los beneficios sostenibles, la calidad duradera, los materiales orgánicos y cómo esta prenda respeta el medio ambiente sin sacrificar estilo',
-            title: 'crea un título que refleje la conciencia ecológica y la calidad del producto',
-            keywords: 'sostenible, orgánico, eco-friendly, atemporal, calidad, consciente, natural, ético, duradero, responsable'
+            system: language === 'en'
+                ? 'You are a passionate advocate for sustainable fashion. Your words inspire conscious consumption and connect eco-friendly choices with personal style.'
+                : 'Eres un apasionado defensor de la moda sostenible. Tus palabras inspiran el consumo consciente y conectan las elecciones ecológicas con el estilo personal.',
+            prompt: language === 'en'
+                ? `Write a compelling sustainable fashion description for: "${product_details}"
+
+Write like a conscious consumer advocate who believes fashion can change the world. Your description should:
+
+🌱 **OPEN WITH PURPOSE:** Start by connecting the garment to a larger mission. This isn't just clothing—it's a statement about the kind of world we want to live in.
+
+💚 **HIGHLIGHT SUSTAINABLE FEATURES:** The organic cotton grown without pesticides. The ethical production. The low-impact dyes. The fair wages. Be specific and proud.
+
+🤲 **CREATE EMOTIONAL CONNECTION:** Help the reader feel good about their choice. Describe the peace of mind that comes from wearing something that didn't harm the planet.
+
+👕 **DESCRIBE THE EXPERIENCE:** How the organic fabric feels softer against skin. How knowing its story makes it more meaningful. The pride of wearing values.
+
+🌟 **SHOW IT'S STYLISH:** Sustainability doesn't mean sacrificing style. Emphasize how modern, beautiful, and desirable this piece is—it just happens to be ethical too.
+
+🌍 **CLOSE WITH INSPIRATION:** End with a call to action that invites the reader to be part of the solution. Every purchase is a vote for the world you want.
+
+Write 200-250 words. Be passionate, specific, and genuinely inspiring.`
+                : `Escribe una descripción convincente de moda sostenible para: "${product_details}"
+
+Escribe como un defensor del consumo consciente que cree que la moda puede cambiar el mundo. Tu descripción debe:
+
+🌱 **ABRE CON PROPÓSITO:** Conecta la prenda con una misión más grande. Esto no es solo ropa, es una declaración sobre el tipo de mundo en el que queremos vivir.
+
+💚 **DESTACA CARACTERÍSTICAS SOSTENIBLES:** El algodón orgánico cultivado sin pesticidas. La producción ética. Los tintes de bajo impacto. Los salarios justos. Sé específico y orgulloso.
+
+🤲 **CREA CONEXIÓN EMOCIONAL:** Ayuda al lector a sentirse bien con su elección. Describe la paz mental que viene de usar algo que no dañó el planeta.
+
+👕 **DESCRIBE LA EXPERIENCIA:** Cómo la tela orgánica se siente más suave contra la piel. Cómo saber su historia la hace más significativa. El orgullo de llevar tus valores.
+
+🌟 **MUESTRA QUE ES ESTILOSA:** La sostenibilidad no significa sacrificar estilo. Enfatiza lo moderna, hermosa y deseable que es esta pieza, que además es ética.
+
+🌍 **CIERRA CON INSPIRACIÓN:** Termina con una llamada a la acción que invite al lector a ser parte de la solución. Cada compra es un voto por el mundo que quieres.
+
+Escribe 200-250 palabras. Sé apasionado, específico y genuinamente inspirador.`
         },
         expressive: {
-            system: 'Eres un redactor de moda urbana con un estilo atrevido, vibrante y lleno de personalidad. Hablas el idioma de la calle, la autoexpresión y la actitud.',
-            description: 'usa un lenguaje enérgico y moderno que transmita actitud, personalidad y la esencia única de quien usa la prenda',
-            title: 'crea un título llamativo, moderno y con gancho que refleje personalidad',
-            keywords: 'atrevido, único, personalidad, estilo, urbano, auténtico, vibrante, actitud, moderno, streetwear'
+            system: language === 'en'
+                ? 'You are a bold, unapologetic voice of urban fashion. You speak the language of the streets—energetic, confident, and full of attitude.'
+                : 'Eres una voz audaz y sin complejos de la moda urbana. Hablas el idioma de la calle: enérgico, seguro y lleno de actitud.',
+            prompt: language === 'en'
+                ? `Create an energetic, attitude-filled description for: "${product_details}"
+
+Write like a street style influencer who knows exactly who they are. Your description should:
+
+⚡ **OPEN WITH ATTITUDE:** Grab them by the collar. This isn't a request—it's a statement. You need this. Now.
+
+🔥 **CREATE PERSONALITY:** This piece has energy. Describe it like it's alive. It moves with you. It speaks for you. It's the loudest thing you're not saying.
+
+👊 **EMPOWER THE READER:** This isn't just clothing—it's armor. It's for people who refuse to blend in. For the ones who walk in and own the room.
+
+💯 **BE SPECIFIC AND VIBRANT:** The way the fabric catches light. How it feels when you move. The perfect imperfections of the embroidery. Make it visceral.
+
+🎵 **USE RHYTHM AND FLOW:** Your words should have a beat. Short punches. Long waves. Like a track that builds.
+
+🌟 **CLOSE WITH CERTAINTY:** No soft calls to action. This is an ending that says "you were already sold, you just didn't know it yet."
+
+Write 200-250 words. Be bold. Be specific. Be unforgettable.`
+                : `Crea una descripción enérgica y llena de actitud para: "${product_details}"
+
+Escribe como un influencer de estilo callejero que sabe exactamente quién es. Tu descripción debe:
+
+⚡ **ABRE CON ACTITUD:** Agárralos por el cuello. Esto no es una solicitud, es una declaración. Necesitas esto. Ahora.
+
+🔥 **CREA PERSONALIDAD:** Esta pieza tiene energía. Descríbela como si estuviera viva. Se mueve contigo. Habla por ti. Es lo más ruidoso que no estás diciendo.
+
+👊 **EMPODERA AL LECTOR:** Esto no es solo ropa, es armadura. Es para personas que se niegan a pasar desapercibidas. Para los que entran y se adueñan de la habitación.
+
+💯 **SÉ ESPECÍFICO Y VIBRANTE:** Cómo la tela atrapa la luz. Cómo se siente cuando te mueves. Las imperfecciones perfectas del bordado. Hazlo visceral.
+
+🎵 **USA RITMO Y FLUJO:** Tus palabras deben tener ritmo. Golpes cortos. Olas largas. Como una canción que construye.
+
+🌟 **CIERRA CON CERTEZA:** Sin llamadas a la acción suaves. Este es un final que dice "ya estabas convencido, solo que no lo sabías aún".
+
+Escribe 200-250 palabras. Sé audaz. Sé específico. Sé inolvidable.`
         }
     };
 
-    // Mapeo de los tonos antiguos a los nuevos estilos
-    const styleMap = {
-        persuasive: 'storytelling',  // El tono persuasivo ahora es narrativo
-        casual: 'sustainable',       // El tono casual ahora es sostenible
-        luxury: 'expressive'         // El tono lujo ahora es expresivo urbano
-    };
-
-    const selectedStyle = styleMap[tone] || 'storytelling';
-    const styleConfig = professionalStyles[selectedStyle];
+    const styleConfig = professionalPrompts[tone] || professionalPrompts.storytelling;
 
     try {
         connection = await mysql.createConnection(dbConfig);
@@ -536,39 +629,12 @@ app.post('/generate-description', async (req, res) => {
         await saveUserMemory(connection, user_id, 'product_history', `product_${Date.now()}`, product_details);
 
         // ============================================
-        // PROMPT PROFESIONAL MEJORADO
-        // ============================================
-        const mainPrompt = `Actúa como un copywriter experto en e-commerce especializado en moda.
-
-Genera una descripción de producto en ${language === 'en' ? 'inglés' : 'español'} para el siguiente artículo:
-"${product_details}"
-
-🎯 **ESTILO:** ${styleConfig.description}
-👤 **AUDIENCIA:** ${config.audience}
-📖 **CONTEXTO ADICIONAL:** ${contextPrompt}
-
-**DIRECTRICES OBLIGATORIAS DE LA DESCRIPCIÓN:**
-
-1. **TÍTULO:** ${styleConfig.title}. Máximo 70 caracteres.
-2. **PRIMER PÁRRAFO:** Conecta emocionalmente, engancha al lector y presenta la prenda como algo especial.
-3. **BENEFICIOS CLAVE:** Lista de 4 beneficios en formato bullet point que destaquen:
-   - Cómo se sentirá el cliente
-   - Características únicas del producto
-   - Calidad y materiales
-   - Versatilidad de uso
-4. **PÁRRAFO DE CIERRE:** Con una llamada a la acción sutil que invite a la compra.
-5. **LONGITUD TOTAL:** Entre 200 y 250 palabras.
-6. **PALABRAS CLAVE:** Incluye de forma natural términos relacionados con moda como: ${styleConfig.keywords}.
-
-La descripción debe ser persuasiva, profesional y hacer que el cliente desee comprar inmediatamente.`;
-
-        // ============================================
-        // LLAMADA A GOOGLE GEMINI
+        // LLAMADA A GEMINI CON PROMPT PROFESIONAL
         // ============================================
         const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
         // Generar descripción principal
-        const result = await model.generateContent(mainPrompt);
+        const result = await model.generateContent(styleConfig.prompt);
         const response = await result.response;
         let mainDescription = response.text();
 
@@ -576,19 +642,19 @@ La descripción debe ser persuasiva, profesional y hacer que el cliente desee co
         let suggestedKeywords = [];
 
         if (include_seo) {
-            // Meta description mejorada
-            const metaPrompt = language === 'en' 
-                ? `Generate a persuasive SEO meta description (max 155 characters) for: ${product_details}. Include relevant keywords like ${styleConfig.keywords} and a call to action.`
-                : `Genera una meta descripción persuasiva para SEO (máx 155 caracteres) para: ${product_details}. Incluye palabras clave relevantes como ${styleConfig.keywords} y una llamada a la acción.`;
+            // Meta description mejorada según el estilo
+            const metaPrompt = language === 'en'
+                ? `Create a compelling SEO meta description (max 155 characters) for a ${tone} style product: ${product_details}. Make it irresistible.`
+                : `Crea una meta descripción SEO convincente (máx 155 caracteres) para un producto de estilo ${tone}: ${product_details}. Hazla irresistible.`;
 
             const metaResult = await model.generateContent(metaPrompt);
             const metaResponse = await metaResult.response;
             metaDescription = metaResponse.text();
 
-            // Keywords mejoradas
+            // Keywords mejoradas según el estilo
             const kwPrompt = language === 'en'
-                ? `Generate 5-7 SEO keywords for a ${product_details}. Include terms like ${styleConfig.keywords}. Return as comma-separated list.`
-                : `Genera 5-7 palabras clave SEO para ${product_details}. Incluye términos como ${styleConfig.keywords}. Devuélvelas como lista separada por comas.`;
+                ? `Generate 5-7 powerful SEO keywords for a ${tone} style product: ${product_details}. Include emotional and descriptive terms. Return as comma-separated.`
+                : `Genera 5-7 palabras clave SEO poderosas para un producto de estilo ${tone}: ${product_details}. Incluye términos emocionales y descriptivos. Devuélvelas separadas por comas.`;
 
             const kwResult = await model.generateContent(kwPrompt);
             const kwResponse = await kwResult.response;
@@ -640,62 +706,6 @@ La descripción debe ser persuasiva, profesional y hacer que el cliente desee co
         if (connection) await connection.end();
     }
 });
-
-app.post('/user-preferences', async (req, res) => {
-    const { user_id, nicho, preferred_style } = req.body;
-    let connection;
-    try {
-        connection = await mysql.createConnection(dbConfig);
-        if (nicho) await saveUserMemory(connection, user_id, 'nicho', 'primary', nicho);
-        if (preferred_style) await saveUserMemory(connection, user_id, 'style', 'preferred_style', preferred_style);
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    } finally {
-        if (connection) await connection.end();
-    }
-});
-
-app.get('/my-descriptions/:userId', async (req, res) => {
-    const { userId } = req.params;
-    let connection;
-    try {
-        connection = await mysql.createConnection(dbConfig);
-        const [rows] = await connection.execute(
-            'SELECT * FROM descriptions WHERE user_id = ? ORDER BY created_at DESC', 
-            [userId]
-        );
-        res.json({ success: true, descriptions: rows });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    } finally {
-        if (connection) await connection.end();
-    }
-});
-
-app.get('/current-user', (req, res) => {
-    if (req.isAuthenticated && req.isAuthenticated()) {
-        res.json({ user: req.user });
-    } else {
-        res.json({ user: null });
-    }
-});
-
-app.get('/logout', (req, res) => {
-    req.logout((err) => {
-        if (err) console.error('Error en logout:', err);
-        res.redirect('https://product-ai-frontend-j3hn.vercel.app');
-    });
-});
-
-app.get('/', (req, res) => {
-    res.json({ 
-        message: '✅ Servidor funcionando',
-        auth: 'Registro y Login con email disponibles',
-        cors_allowed: allowedOrigins
-    });
-});
-
 // ============================================
 // RUTAS DE RECUPERACIÓN DE CONTRASEÑA
 // ============================================
