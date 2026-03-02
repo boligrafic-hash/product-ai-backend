@@ -440,7 +440,7 @@ app.post('/resend-verification', async (req, res) => {
 });
 
 // ============================================
-// RUTA DE GENERACIÓN DE DESCRIPCIONES (OPENROUTER)
+// RUTA DE GENERACIÓN DE DESCRIPCIONES (OPENROUTER - CORREGIDA)
 // ============================================
 app.post('/generate-description', async (req, res) => {
     const { user_id, product_details, tone, language = 'en', include_seo = true } = req.body;
@@ -449,6 +449,28 @@ app.post('/generate-description', async (req, res) => {
     if (!user_id) {
         return res.status(401).json({ error: 'Usuario no autenticado' });
     }
+
+    // ============================================
+    // CONFIGURACIÓN DE IDIOMA (FUERA DEL TRY)
+    // ============================================
+    const languageConfig = {
+        en: {
+            system: 'You are a professional e-commerce copywriter specializing in creating compelling product descriptions for the US market. Your tone is persuasive, benefit-focused, and tailored to American shoppers.',
+            audience: 'US online shoppers. Use American English spelling and terminology.',
+            keywords: 'Include natural SEO keywords relevant to the product category.',
+            fallbackTitle: 'Discover the ultimate in comfort and style',
+            fallbackDesc: 'Discover the ultimate in comfort and style with this premium product. Perfect for any occasion.'
+        },
+        es: {
+            system: 'Eres un copywriter experto en e-commerce especializado en crear descripciones de productos persuasivas para el mercado hispanohablante. Tu tono es profesional y cercano.',
+            audience: 'Público hispano. Usa español neutro y claro.',
+            keywords: 'Incluye palabras clave SEO en español de forma natural.',
+            fallbackTitle: 'Descubre lo último en comodidad y estilo',
+            fallbackDesc: 'Descubre lo último en comodidad y estilo con este producto premium. Perfecto para cualquier ocasión.'
+        }
+    };
+
+    const config = languageConfig[language] || languageConfig.en;
 
     try {
         connection = await mysql.createConnection(dbConfig);
@@ -493,28 +515,6 @@ app.post('/generate-description', async (req, res) => {
         const contextPrompt = await buildAIContext(connection, user_id, product_details, tone);
         await saveUserMemory(connection, user_id, 'product_history', `product_${Date.now()}`, product_details);
 
-        // ============================================
-        // CONFIGURACIÓN DE IDIOMA (INGLÉS POR DEFECTO)
-        // ============================================
-        const languageConfig = {
-            en: {
-                system: 'You are a professional e-commerce copywriter specializing in creating compelling product descriptions for the US market. Your tone is persuasive, benefit-focused, and tailored to American shoppers.',
-                audience: 'US online shoppers. Use American English spelling and terminology.',
-                keywords: 'Include natural SEO keywords relevant to the product category.',
-                fallbackTitle: 'Discover the ultimate in comfort and style',
-                fallbackDesc: 'Discover the ultimate in comfort and style with this premium product. Perfect for any occasion.'
-            },
-            es: {
-                system: 'Eres un copywriter experto en e-commerce especializado en crear descripciones de productos persuasivas para el mercado hispanohablante. Tu tono es profesional y cercano.',
-                audience: 'Público hispano. Usa español neutro y claro.',
-                keywords: 'Incluye palabras clave SEO en español de forma natural.',
-                fallbackTitle: 'Descubre lo último en comodidad y estilo',
-                fallbackDesc: 'Descubre lo último en comodidad y estilo con este producto premium. Perfecto para cualquier ocasión.'
-            }
-        };
-
-        const config = languageConfig[language] || languageConfig.en;
-
         // Construir el prompt según el tono seleccionado
         const toneDescription = {
             persuasive: language === 'en' ? 'persuasive, benefit-focused, and compelling' : 'persuasivo, centrado en beneficios y convincente',
@@ -543,7 +543,7 @@ The description must follow these guidelines:
 - **Language:** ${language === 'en' ? 'Natural, fluent American English.' : 'Español neutro, claro y fluido.'}`;
 
         // ============================================
-        // LLAMADA A OPENROUTER (GRATIS)
+        // LLAMADA A OPENROUTER (GRATIS - MODELO CAMBIADO)
         // ============================================
         const mainResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -555,12 +555,8 @@ The description must follow these guidelines:
                 'X-Title': 'AI Description Generator'
             },
             body: JSON.stringify({
-                // Modelo gratuito recomendado (Gemma 3)
-                model: 'google/gemma-3-27b-it:free',
-                // Alternativas gratuitas:
-                // 'meta-llama/llama-3.3-70b-instruct:free' - Llama 3.3
-                // 'mistralai/mistral-7b-instruct:free' - Mistral 7B
-                // 'qwen/qwen3-4b:free' - Qwen 4B
+                // ✅ MODELO CAMBIADO a Llama 3.3 (evita rate limit)
+                model: 'meta-llama/llama-3.3-70b-instruct:free',
                 messages: [
                     { role: 'system', content: config.system },
                     { role: 'user', content: mainPrompt }
@@ -575,10 +571,10 @@ The description must follow these guidelines:
         // Verificar errores de OpenRouter
         if (mainData.error) {
             console.error('Error de OpenRouter:', mainData.error);
-            if (mainData.error.code === 402) {
+            if (mainData.error.code === 402 || mainData.error.code === 429) {
                 return res.status(500).json({ 
-                    error: 'Límite de uso diario alcanzado. Intenta mañana o cambia de modelo.',
-                    details: 'Cuota gratuita excedida'
+                    error: 'Límite de uso alcanzado. Intenta más tarde o cambia de modelo.',
+                    details: 'Cuota gratuita temporalmente excedida'
                 });
             }
             throw new Error(mainData.error.message);
@@ -607,7 +603,7 @@ The description must follow these guidelines:
                     'X-Title': 'AI Description Generator'
                 },
                 body: JSON.stringify({
-                    model: 'google/gemma-3-27b-it:free',
+                    model: 'meta-llama/llama-3.3-70b-instruct:free',
                     messages: [
                         { role: 'system', content: language === 'en' ? 'SEO specialist.' : 'Experto en SEO.' },
                         { role: 'user', content: metaPrompt }
@@ -635,7 +631,7 @@ The description must follow these guidelines:
                     'X-Title': 'AI Description Generator'
                 },
                 body: JSON.stringify({
-                    model: 'google/gemma-3-27b-it:free',
+                    model: 'meta-llama/llama-3.3-70b-instruct:free',
                     messages: [
                         { role: 'system', content: language === 'en' ? 'SEO keyword researcher.' : 'Investigador de palabras clave SEO.' },
                         { role: 'user', content: kwPrompt }
@@ -678,7 +674,7 @@ The description must follow these guidelines:
     } catch (error) {
         console.error('Error:', error);
         
-        // Fallback con el idioma correspondiente
+        // AHORA languageConfig SÍ ESTÁ DEFINIDO AQUÍ
         const fallbackConfig = languageConfig[req.body.language || 'en'] || languageConfig.en;
         
         res.json({ 
