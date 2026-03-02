@@ -867,6 +867,52 @@ app.post('/update-password', async (req, res) => {
 // ============================================
 // INICIAR SERVIDOR
 // ============================================
+// ============================================
+// RUTA PARA OBTENER HISTORIAL DEL USUARIO
+// ============================================
+app.get('/my-descriptions/:userId', async (req, res) => {
+    const { userId } = req.params;
+    let connection;
+
+    if (!userId) {
+        return res.status(400).json({ error: 'userId requerido' });
+    }
+
+    try {
+        connection = await mysql.createConnection(dbConfig);
+
+        // Verificar que el usuario existe
+        const [userCheck] = await connection.execute(
+            'SELECT id FROM profiles WHERE id = ?',
+            [userId]
+        );
+
+        if (userCheck.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        // Obtener las últimas 20 descripciones
+        const [descriptions] = await connection.execute(
+            `SELECT id, product_details, tone, generated_description, created_at 
+             FROM descriptions 
+             WHERE user_id = ? 
+             ORDER BY created_at DESC 
+             LIMIT 20`,
+            [userId]
+        );
+
+        res.json({
+            success: true,
+            descriptions: descriptions
+        });
+
+    } catch (error) {
+        console.error('Error obteniendo historial:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (connection) await connection.end();
+    }
+});
 app.listen(PORT, () => {
     console.log(`✅ Servidor en http://localhost:${PORT}`);
     console.log(`🔐 Auth: Registro y Login con email`);
