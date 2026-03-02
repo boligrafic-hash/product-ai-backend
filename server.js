@@ -134,12 +134,6 @@ async function ensureTablesExist() {
         `);
         console.log('✅ Tabla user_memory verificada/creada');
 
-        // Crear tabla session para PostgreSQL (si se usa)
-        if (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL) {
-            // La tabla session la crea automáticamente connect-pg-simple
-            console.log('✅ Tabla session será creada por connect-pg-simple');
-        }
-
     } catch (error) {
         console.error('❌ Error creando tablas:', error);
     } finally {
@@ -148,9 +142,8 @@ async function ensureTablesExist() {
 }
 
 // Llamar a la función al iniciar
-ensureTablesExist();
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                INDEX idx_user_id (user_id),
+ensureTablesExist();  // ← SIN 's' al final
+`updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,                INDEX idx_user_id (user_id),
                 INDEX idx_type (memory_type),
                 UNIQUE KEY unique_user_memory (user_id, memory_type, memory_key)
             )
@@ -165,7 +158,7 @@ ensureTablesExist();
 }
 
 // Llamar a la función al iniciar
-ensureTablesExist();  // ← Línea 162 - DEBE COINCIDIR EXACTAMENTE
+ensureTablesExist();  // ← CORRECTO: sin 's'
 // ============================================
 // FUNCIÓN DE EMAIL (REAL O SIMULADO)
 // ============================================
