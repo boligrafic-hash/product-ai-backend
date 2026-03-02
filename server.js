@@ -109,17 +109,6 @@ app.use(session({
 }));
 
 app.use(passport.initialize());
-app.use(passport.session());
-
-const dbConfig = {
-    host: process.env.TIDB_HOST,
-    port: Number(process.env.TIDB_PORT),
-    user: process.env.TIDB_USER,
-    password: process.env.TIDB_PASSWORD,
-    database: process.env.TIDB_DATABASE,
-    ssl: process.env.TIDB_ENABLE_SSL === 'true' ? {} : null
-};
-
 // ============================================
 // FUNCIÓN PARA CREAR TABLAS SI NO EXISTEN
 // ============================================
@@ -159,8 +148,24 @@ async function ensureTablesExist() {
 }
 
 // Llamar a la función al iniciar
-ensureTablesExists();
+ensureTablesExist();
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_user_id (user_id),
+                INDEX idx_type (memory_type),
+                UNIQUE KEY unique_user_memory (user_id, memory_type, memory_key)
+            )
+        `);
+        console.log('✅ Tabla user_memory verificada/creada');
 
+    } catch (error) {
+        console.error('❌ Error creando tablas:', error);
+    } finally {
+        if (connection) await connection.end();
+    }
+}
+
+// Llamar a la función al iniciar
+ensureTablesExist();  // ← Línea 162 - DEBE COINCIDIR EXACTAMENTE
 // ============================================
 // FUNCIÓN DE EMAIL (REAL O SIMULADO)
 // ============================================
