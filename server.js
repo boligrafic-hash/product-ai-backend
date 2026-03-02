@@ -8,6 +8,7 @@ const session = require('express-session');
 const passport = require('passport');
 const sgMail = require('@sendgrid/mail');
 const crypto = require('crypto');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 
 const app = express();
@@ -20,6 +21,9 @@ if (process.env.SENDGRID_API_KEY && process.env.SENDGRID_API_KEY.startsWith('SG.
 } else {
     console.warn('⚠️ SendGrid no configurado - usando modo simulado (los tokens se muestran en consola)');
 }
+
+// Inicializar Google Gemini
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 // ============================================
 // CONFIGURACIÓN DE CORS
@@ -80,7 +84,6 @@ function generateVerificationToken() {
 async function sendVerificationEmail(email, token) {
     const verificationLink = `https://product-ai-backend.onrender.com/verify-email?token=${token}`;
     
-    // Modo simulado si no hay SendGrid configurado
     if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_API_KEY.startsWith('SG.')) {
         console.log(`[SIMULADO] Email de verificación para ${email}: ${verificationLink}`);
         return true;
@@ -121,19 +124,6 @@ async function sendVerificationEmail(email, token) {
         return false;
     }
 }
-
-// ============================================
-// GOOGLE OAUTH (Comentado temporalmente)
-// ============================================
-/*
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: '/auth/google/callback'
-}, async (accessToken, refreshToken, profile, done) => {
-    // ... código de Google OAuth ...
-}));
-*/
 
 passport.serializeUser((user, done) => {
     done(null, user.id);
@@ -440,7 +430,7 @@ app.post('/resend-verification', async (req, res) => {
 });
 
 // ============================================
-// RUTA DE GENERACIÓN DE DESCRIPCIONES (OPENROUTER - CORREGIDA)
+// RUTA DE GENERACIÓN DE DESCRIPCIONES (GOOGLE GEMINI)
 // ============================================
 app.post('/generate-description', async (req, res) => {
     const { user_id, product_details, tone, language = 'en', include_seo = true } = req.body;
@@ -543,107 +533,39 @@ The description must follow these guidelines:
 - **Language:** ${language === 'en' ? 'Natural, fluent American English.' : 'Español neutro, claro y fluido.'}`;
 
         // ============================================
-        // LLAMADA A OPENROUTER (GRATIS - MODELO CAMBIADO)
+        // LLAMADA A GOOGLE GEMINI (GRATIS Y ROBUSTO)
         // ============================================
-        const mainResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                // ⚠️ Headers obligatorios para modelos gratuitos
-                'HTTP-Referer': 'https://product-ai-frontend-j3hn.vercel.app',
-                'X-Title': 'AI Description Generator'
-            },
-            body: JSON.stringify({
-                // ✅ MODELO CAMBIADO a Llama 3.3 (evita rate limit)
-                model: 'meta-llama/llama-3.3-70b-instruct:free',
-                messages: [
-                    { role: 'system', content: config.system },
-                    { role: 'user', content: mainPrompt }
-                ],
-                temperature: 0.7,
-                max_tokens: 500
-            })
-        });
-
-        const mainData = await mainResponse.json();
         
-        // Verificar errores de OpenRouter
-        if (mainData.error) {
-            console.error('Error de OpenRouter:', mainData.error);
-            if (mainData.error.code === 402 || mainData.error.code === 429) {
-                return res.status(500).json({ 
-                    error: 'Límite de uso alcanzado. Intenta más tarde o cambia de modelo.',
-                    details: 'Cuota gratuita temporalmente excedida'
-                });
-            }
-            throw new Error(mainData.error.message);
-        }
+        // Obtener el modelo (Gemini 1.5 Flash es rápido y tiene excelente relación calidad/precio)
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-        if (!mainData.choices || !mainData.choices[0] || !mainData.choices[0].message) {
-            throw new Error('Respuesta inválida de OpenRouter');
-        }
+        // Generar descripción principal
+        const result = await model.generateContent(mainPrompt);
+        const response = await result.response;
+        let mainDescription = response.text();
 
-        let mainDescription = mainData.choices[0].message.content;
         let metaDescription = '';
         let suggestedKeywords = [];
 
         if (include_seo) {
-            // Meta description con OpenRouter
+            // Meta description con Gemini
             const metaPrompt = language === 'en' 
                 ? `Generate a persuasive SEO meta description (max 155 characters) for: ${product_details}. Include relevant keywords and a call to action.`
                 : `Genera una meta descripción persuasiva para SEO (máx 155 caracteres) para: ${product_details}. Incluye palabras clave relevantes y llamada a la acción.`;
 
-            const metaRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST', 
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                    'HTTP-Referer': 'https://product-ai-frontend-j3hn.vercel.app',
-                    'X-Title': 'AI Description Generator'
-                },
-                body: JSON.stringify({
-                    model: 'meta-llama/llama-3.3-70b-instruct:free',
-                    messages: [
-                        { role: 'system', content: language === 'en' ? 'SEO specialist.' : 'Experto en SEO.' },
-                        { role: 'user', content: metaPrompt }
-                    ],
-                    temperature: 0.5,
-                    max_tokens: 60
-                })
-            });
-            const metaData = await metaRes.json();
-            if (metaData.choices?.[0]?.message) {
-                metaDescription = metaData.choices[0].message.content;
-            }
+            const metaResult = await model.generateContent(metaPrompt);
+            const metaResponse = await metaResult.response;
+            metaDescription = metaResponse.text();
 
-            // Keywords con OpenRouter
+            // Keywords con Gemini
             const kwPrompt = language === 'en'
                 ? `Generate 5-7 SEO keywords for: ${product_details}. Include relevant terms for the US market. Return as comma-separated list.`
                 : `Genera 5-7 palabras clave SEO para: ${product_details}. Incluye términos relevantes para el mercado hispano. Devuélvelas como lista separada por comas.`;
 
-            const kwRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST', 
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                    'HTTP-Referer': 'https://product-ai-frontend-j3hn.vercel.app',
-                    'X-Title': 'AI Description Generator'
-                },
-                body: JSON.stringify({
-                    model: 'meta-llama/llama-3.3-70b-instruct:free',
-                    messages: [
-                        { role: 'system', content: language === 'en' ? 'SEO keyword researcher.' : 'Investigador de palabras clave SEO.' },
-                        { role: 'user', content: kwPrompt }
-                    ],
-                    temperature: 0.6,
-                    max_tokens: 100
-                })
-            });
-            const kwData = await kwRes.json();
-            if (kwData.choices?.[0]?.message) {
-                suggestedKeywords = kwData.choices[0].message.content.split(',').map(k => k.trim());
-            }
+            const kwResult = await model.generateContent(kwPrompt);
+            const kwResponse = await kwResult.response;
+            const kwText = kwResponse.text();
+            suggestedKeywords = kwText.split(',').map(k => k.trim());
         }
 
         await connection.execute(
@@ -674,7 +596,6 @@ The description must follow these guidelines:
     } catch (error) {
         console.error('Error:', error);
         
-        // AHORA languageConfig SÍ ESTÁ DEFINIDO AQUÍ
         const fallbackConfig = languageConfig[req.body.language || 'en'] || languageConfig.en;
         
         res.json({ 
@@ -912,6 +833,6 @@ app.listen(PORT, () => {
     console.log(`✅ Servidor en http://localhost:${PORT}`);
     console.log(`🔐 Auth: Registro y Login con email`);
     console.log(`📧 Email: ${process.env.SENDGRID_API_KEY && process.env.SENDGRID_API_KEY.startsWith('SG.') ? 'SendGrid configurado' : 'Modo simulado'}`);
-    console.log(`🤖 IA: OpenRouter gratis (${process.env.OPENROUTER_API_KEY ? 'conectado' : 'no configurado'})`);
+    console.log(`🤖 IA: Google Gemini conectado (modelo: gemini-1.5-flash)`);
     console.log(`🌐 CORS permitidos:`, allowedOrigins);
 });
